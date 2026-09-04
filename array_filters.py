@@ -1,7 +1,7 @@
 """
 array_filters.py
 ================
-Core, side-effect-free module. Geometry -> E*, E_true -> normalized power
+Geometry -> E*, E_true -> normalized power
 transfer functions R_x, R_y -> summary metrics.
 
     y      = E x                E  = [1, x_i, y_i]              (N x 3)
@@ -21,11 +21,10 @@ well everything outside it is rejected.
 import numpy as np
 
 # ------------------------------------------------------------------ config
-A_KM = 10.0                      # square half-width
-B_KM = A_KM * np.sqrt(2)         # shared circumradius, 14.142 km
+R_KM = 15.0                      # array circumradius: vertices lie on this circle
 LAT0, LON0 = 0.0, -140.0
 DEG_LON_KM, DEG_LAT_KM = 111.320, 110.570
-NX, NY, DX_DEG = 480, 360, 1 / 24        # model domain: 20 x 15 deg at 1/24
+NX, NY, DX_DEG = 512, 384, 1 / 24        # tpose24 grid: 512 x 384 at 1/24 deg
 SIGNAL_CUT_KM = 100.0            # lambda > this = signal, < this = leakage
 
 
@@ -39,23 +38,29 @@ def polygon(n, R, phi0_deg=0.0):
 # Rotation choices: a regular N-gon repeats every 360/N degrees, and for ODD N
 # a further rotation of 180/N maps it onto its own point-inversion, leaving |H|
 # unchanged. So the distinct range is 360/N (even N) or 180/N (odd N).
-ARRAYS = {
-    "triangle":     polygon(3, B_KM, 0.0),
-    "triangle 90":  polygon(3, B_KM, 90.0),
-    "square":       np.array([[A_KM, A_KM], [-A_KM, A_KM],
-                              [-A_KM, -A_KM], [A_KM, -A_KM], [0.0, 0.0]]),
-    "diamond":      polygon(4, B_KM, 0.0),
-    "hexagon":      polygon(6, B_KM, 0.0),
-    "hexagon 90":   polygon(6, B_KM, 90.0),
-    "octagon":      polygon(8, B_KM, 0.0),
-    "octagon 22.5": polygon(8, B_KM, 22.5),
-}
+def make_arrays(R):
+    """The candidate stencils, all inscribed in a circle of radius R (km):
+    every vertex (including the square's corners) lies on that circle."""
+    a = R / np.sqrt(2)           # square half-width so its corners hit the circle
+    return {
+        "triangle":     polygon(3, R, 0.0),
+        "triangle 90":  polygon(3, R, 90.0),
+        "square":       np.array([[a, a], [-a, a], [-a, -a], [a, -a], [0.0, 0.0]]),
+        "diamond":      polygon(4, R, 0.0),
+        "hexagon":      polygon(6, R, 0.0),
+        "hexagon 90":   polygon(6, R, 90.0),
+        "octagon":      polygon(8, R, 0.0),
+        "octagon 22.5": polygon(8, R, 22.5),
+    }
+
+
+ARRAYS = make_arrays(R_KM)
 LABEL = {"triangle": "vertex east", "triangle 90": "vertex north",
-         "square": f"$\\pm${A_KM:.0f}, $\\pm${A_KM:.0f} km",
+         "square": "corners at $\\pm$45$\\degree$",
          "diamond": "square rotated 45$\\degree$",
          "hexagon": "vertex on $+x$", "hexagon 90": "rotated 90$\\degree$",
          "octagon": "vertex on $+x$", "octagon 22.5": "rotated 22.5$\\degree$"}
-CIRC = {k: B_KM for k in ARRAYS}
+CIRC = {k: R_KM for k in ARRAYS}
 
 
 def model_wavenumbers():
